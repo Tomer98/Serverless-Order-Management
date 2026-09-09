@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Order Management System</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #f0f2f5; color: #333; }
+    header { background: #232f3e; color: white; padding: 16px 32px; font-size: 20px; font-weight: bold; }
+    .container { max-width: 950px; margin: 30px auto; padding: 0 16px; }
+    .card { background: white; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+    h2 { margin-bottom: 16px; font-size: 18px; color: #232f3e; }
+    input, select, textarea { width: 100%; padding: 8px 12px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+    textarea { resize: vertical; min-height: 60px; }
+    button { padding: 9px 20px; background: #ff9900; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; }
+    button:hover { background: #e68a00; }
+    button.danger { background: #d93025; }
+    button.danger:hover { background: #b52a1f; }
+    button.secondary { background: #232f3e; }
+    button.secondary:hover { background: #1a232e; }
+    button.purple { background: #6b3fa0; }
+    button.purple:hover { background: #532f80; }
+    .msg { margin-top: 10px; padding: 10px; border-radius: 4px; font-size: 14px; }
+    .msg.success { background: #d4edda; color: #155724; }
+    .msg.error { background: #f8d7da; color: #721c24; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { background: #232f3e; color: white; padding: 10px; text-align: left; }
+    td { padding: 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+    tr:hover td { background: #f9f9f9; }
+    .actions button { margin-right: 6px; padding: 5px 12px; font-size: 12px; }
+    .row { display: flex; gap: 10px; }
+    .row input { margin-bottom: 0; }
+    .sentiment-box { margin-top: 12px; padding: 14px; border-radius: 6px; background: #f0f2f5; }
+    .sentiment-label { font-size: 20px; font-weight: bold; margin-bottom: 8px; }
+    .sentiment-bar { margin: 4px 0; display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .bar { height: 10px; border-radius: 5px; background: #ff9900; }
+    .POSITIVE .sentiment-label { color: #155724; }
+    .NEGATIVE .sentiment-label { color: #721c24; }
+    .NEUTRAL .sentiment-label { color: #333; }
+    .MIXED .sentiment-label { color: #856404; }
+  </style>
+</head>
+<body>
+<header>Order Management System</header>
+<div class="container">
+
+  <!-- Create Order -->
+  <div class="card">
+    <h2>Create Order</h2>
+    <textarea id="description" placeholder="Order description"></textarea>
+    <input id="price" type="number" placeholder="Price ($)" min="0" step="0.01" />
+    <button onclick="createOrder()">Create Order</button>
+    <div id="createMsg"></div>
+  </div>
+
+  <!-- All Orders -->
+  <div class="card">
+    <h2>All Orders <button class="secondary" style="float:right;font-size:12px;padding:5px 12px" onclick="loadOrders()">Refresh</button></h2>
+    <table>
+      <thead><tr><th>Order ID</th><th>Description</th><th>Price</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+      <tbody id="ordersTable"><tr><td colspan="6" style="text-align:center">Click Refresh to load orders</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- Update Order -->
+  <div class="card">
+    <h2>Update Order Status</h2>
+    <div class="row">
+      <input id="updateId" placeholder="Order ID" />
+      <select id="updateStatus">
+        <option value="pending">Pending</option>
+        <option value="processing">Processing</option>
+        <option value="shipped">Shipped</option>
+        <option value="delivered">Delivered</option>
+      </select>
+    </div>
+    <br/>
+    <button onclick="updateOrder()">Update Status</button>
+    <div id="updateMsg"></div>
+  </div>
+
+  <!-- Order Statistics -->
+  <div class="card">
+    <h2>Order Statistics <span style="font-size:12px;color:#6b3fa0;font-weight:normal">(powered by AWS Lambda + DynamoDB)</span></h2>
+    <button class="purple" onclick="loadStats()">Get Statistics</button>
+    <div id="statsResult"></div>
+  </div>
+
+  <!-- Subscribe / Unsubscribe -->
+  <div class="card">
+    <h2>Email Notifications</h2>
+    <input id="email" placeholder="your@email.com" />
+    <button onclick="subscribe()">Subscribe</button>
+    <button class="danger" onclick="unsubscribe()">Unsubscribe</button>
+    <div id="subMsg"></div>
+  </div>
+
+  <!-- Generate PDF -->
+  <div class="card">
+    <h2>Generate Deleted Orders PDF</h2>
+    <button onclick="generatePDF()">Generate PDF</button>
+    <div id="pdfMsg"></div>
+  </div>
+
+</div>
+
+<script>
+  const API = 'https://y7zcu18r70.execute-api.us-east-1.amazonaws.com/prod';
+
+  function msg(id, text, type) {
+    const el = document.getElementById(id);
+    el.className = 'msg ' + type;
+    el.textContent = text;
+  }
+
+  async function createOrder() {
+    const body = {
+      description: document.getElementById('description').value,
+      price: parseFloat(document.getElementById('price').value)
+    };
+    try {
+      const res = await fetch(`${API}/orders`, { method: 'POST', body: JSON.stringify(body) });
+      const data = await res.json();
+      msg('createMsg', `Order created! ID: ${data.orderId}`, 'success');
+      loadOrders();
+    } catch (e) {
+      msg('createMsg', 'Error creating order', 'error');
+    }
+  }
+
+  async function loadOrders() {
+    try {
+      const res = await fetch(`${API}/orders`);
+      const orders = await res.json();
+      const tbody = document.getElementById('ordersTable');
+      if (!orders.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center">No orders found</td></tr>';
+        return;
+      }
+      tbody.innerHTML = orders.map(o => `
+        <tr>
+          <td style="font-size:11px">${o.orderId}</td>
+          <td>${o.description || ''}</td>
+          <td>$${parseFloat(o.price || 0).toFixed(2)}</td>
+          <td>${o.status}</td>
+          <td style="font-size:11px">${(o.createdAt || '').replace('T', ' ').substring(0, 19)}</td>
+          <td class="actions">
+            <button class="secondary" onclick="copyId('${o.orderId}')">Copy ID</button>
+            <button class="danger" onclick="deleteOrder('${o.orderId}')">Delete</button>
+          </td>
+        </tr>`).join('');
+    } catch (e) {
+      document.getElementById('ordersTable').innerHTML = '<tr><td colspan="6">Error loading orders</td></tr>';
+    }
+  }
+
+  function copyId(id) {
+    navigator.clipboard.writeText(id);
+  }
+
+  async function updateOrder() {
+    const id = document.getElementById('updateId').value;
+    const status = document.getElementById('updateStatus').value;
+    try {
+      const res = await fetch(`${API}/orders/${id}`, { method: 'PUT', body: JSON.stringify({ status }) });
+      const data = await res.json();
+      msg('updateMsg', `Order updated to: ${data.status}`, 'success');
+      loadOrders();
+    } catch (e) {
+      msg('updateMsg', 'Error updating order', 'error');
+    }
+  }
+
+  async function deleteOrder(id) {
+    try {
+      await fetch(`${API}/orders/${id}`, { method: 'DELETE' });
+      loadOrders();
+    } catch (e) {
+      alert('Error: ' + e.message);
+    }
+  }
+
+  async function loadStats() {
+    const el = document.getElementById('statsResult');
+    el.innerHTML = '<div class="msg success">Loading...</div>';
+    try {
+      const res = await fetch(`${API}/stats`);
+      const data = await res.json();
+      const statusRows = Object.entries(data.byStatus).map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+      el.innerHTML = `
+        <div style="margin-top:12px">
+          <table>
+            <tr><th>Metric</th><th>Value</th></tr>
+            <tr><td>Total Orders</td><td>${data.totalOrders}</td></tr>
+            <tr><td>Total Revenue</td><td>$${data.totalRevenue.toFixed(2)}</td></tr>
+            ${statusRows}
+          </table>
+        </div>`;
+    } catch (e) {
+      el.innerHTML = '<div class="msg error">Error loading statistics</div>';
+    }
+  }
+
+  async function subscribe() {
+    const email = document.getElementById('email').value;
+    try {
+      const res = await fetch(`${API}/subscribe`, { method: 'POST', body: JSON.stringify({ email }) });
+      const data = await res.json();
+      msg('subMsg', data.message, 'success');
+    } catch (e) {
+      msg('subMsg', 'Error subscribing', 'error');
+    }
+  }
+
+  async function unsubscribe() {
+    const email = document.getElementById('email').value;
+    try {
+      const res = await fetch(`${API}/unsubscribe`, { method: 'POST', body: JSON.stringify({ email }) });
+      const data = await res.json();
+      msg('subMsg', data.message, 'success');
+    } catch (e) {
+      msg('subMsg', 'Error unsubscribing', 'error');
+    }
+  }
+
+  async function generatePDF() {
+    msg('pdfMsg', 'Generating...', 'success');
+    try {
+      const res = await fetch(`${API}/generate-pdf`);
+      const data = await res.json();
+      document.getElementById('pdfMsg').innerHTML = `<div class="msg success">PDF ready: <a href="${data.url}" target="_blank">Download PDF</a></div>`;
+    } catch (e) {
+      msg('pdfMsg', 'Error generating PDF', 'error');
+    }
+  }
+
+  loadOrders();
+</script>
+</body>
+</html>

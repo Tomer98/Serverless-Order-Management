@@ -1,0 +1,11 @@
+# AWS resource identifiers (account id, bucket name, topic ARN)
+.env
+
+# Lambda deployment bundles — rebuilt from the .py sources
+*.zip
+
+# Un-redacted screenshots kept locally only
+docs/_originals/
+
+# Course assignment brief — not mine to redistribute
+Final Assignment, Part B.pdf
