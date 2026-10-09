@@ -28,15 +28,15 @@ API Gateway, which sidesteps the payload size limit entirely.
 | Service | Role |
 |---|---|
 | **API Gateway** | REST API, Lambda proxy integration, CORS |
-| **Lambda** | 13 Python functions — one per endpoint plus the two event consumers |
+| **Lambda** | 13 Python functions — nine behind API routes, two EventBridge consumers, two not yet routed |
 | **DynamoDB** | `orders` table, `orderId` (UUID) partition key, on-demand capacity |
 | **EventBridge** | Decouples the delete flow; fans `OrderDeleted` out to two targets |
 | **SNS** | Email notifications with subscribe / unsubscribe and confirmation |
 | **S3** | Deleted-order backups and generated PDF summaries |
 | **Amplify** | Hosts the static web client over HTTPS |
-| **CloudWatch Logs** | Logs and traces for every function |
-| **IAM** | Execution role scoped to the services each function actually touches |
-| **Comprehend / Translate** | Sentiment scoring and translation of order text |
+| **CloudWatch Logs** | Execution logs for every function |
+| **IAM** | Lab-provided `LabRole` (AWS Academy); production would give each function its own least-privilege role |
+| **Comprehend / Translate** | Sentiment scoring and translation of order text — implemented, not yet routed |
 
 ## API
 
@@ -63,14 +63,16 @@ deploy.ps1     AWS CLI script wiring a Lambda to an API Gateway route
 
 ## Running it yourself
 
-Both DynamoDB and the Lambda code are region- and account-agnostic; the only account-specific
-values are the SNS topic ARN and the S3 bucket name, which are read from Lambda environment
-variables. Copy `.env.example` to see the shape and set them on the relevant functions.
+The Lambda code is region- and account-agnostic: the only account-specific values it needs are
+the SNS topic ARN and the S3 bucket name, read from environment variables. `.env.example` shows
+the shape; set them on the relevant functions. The client's API base URL is the `API` constant
+in `client/index.html`.
 
-`deploy.ps1` shows the AWS CLI pattern used throughout — creating a method, attaching an
-`AWS_PROXY` integration, granting API Gateway permission to invoke the function, and redeploying
-the stage. It resolves the account id at runtime via `sts get-caller-identity`, so nothing
-account-specific is hardcoded.
+Most resources were created in the AWS Console. `deploy.ps1` scripts the wiring of the `/stats`
+route with the AWS CLI — creating the method, attaching an `AWS_PROXY` integration, granting
+API Gateway permission to invoke the function, and redeploying the stage. It looks up the account
+id at runtime via `sts get-caller-identity`; the API and resource ids at the top belong to the
+original deployment and need replacing.
 
 ## Notes and limitations
 
@@ -81,9 +83,10 @@ This was built on **AWS Academy Learner Lab**, which shapes a few decisions:
 - The API is deployed with `--authorization-type NONE`. Fine for a graded demo where the endpoint
   is short-lived; anything real needs Cognito, an API key, or IAM auth in front of it.
 - The `orders` table has no sort key, so "all orders by date" is a `Scan` sorted in the Lambda.
-  That's fine at assignment scale and wrong at any real volume — a GSI on `createdAt` is the fix.
-- `AnalyzeSentiment` and `TranslateOrder` are written and deployed, but not yet wired to routes
-  in the client.
+  That's fine at assignment scale and wrong at any real volume — a GSI with a fixed partition key
+  and `createdAt` as its sort key would let it `Query` in order instead.
+- `AnalyzeSentiment` and `TranslateOrder` are implemented but not yet wired into the API or the
+  client.
 
 The AWS resources behind the URLs in `docs/` no longer exist — the lab environment has since been
 torn down.
