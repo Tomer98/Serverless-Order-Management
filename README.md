@@ -28,7 +28,7 @@ API Gateway, which sidesteps the payload size limit entirely.
 | Service | Role |
 |---|---|
 | **API Gateway** | REST API, Lambda proxy integration, CORS |
-| **Lambda** | 13 Python functions — nine behind API routes, two EventBridge consumers, two not yet routed |
+| **Lambda** | 13 Python functions: one per endpoint (9), two event consumers, and two AI functions not yet wired to the client |
 | **DynamoDB** | `orders` table, `orderId` (UUID) partition key, on-demand capacity |
 | **EventBridge** | Decouples the delete flow; fans `OrderDeleted` out to two targets |
 | **SNS** | Email notifications with subscribe / unsubscribe and confirmation |
